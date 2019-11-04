@@ -2,23 +2,23 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <time.h>
-#include<chrono>
-#include <iostream>
-#include <thread>
 
 using namespace std;
 
+int PRODUCERS = 20;
+int CONSUMERS = 30;
+int REQUEST = 100000;
 
-#define PRODUCERS 20
-#define CONSUMERS 30
-#define REQUEST 100000
-#define BUFFER_SIZE 1000
-int buffer[BUFFER_SIZE] = {0}, tail = 0, head = 0;
+const int BUFFER_SIZE = 1000;
+int buffer[BUFFER_SIZE] = {0};
+
+
+int tail = 0, head = 0;
 
 int request = 0, success = 0;
 
-const int producer_delay = 10; // in miliseconds
-const int consumer_delay = 10; // in miliseconds
+const int producer_delay = 15; // in miliseconds
+const int consumer_delay = 15; // in miliseconds
 
 void *add_item();
 void *remove_item();
@@ -30,15 +30,19 @@ clock_t timer1, timer2, ptime1, ptime2, ctime1, ctime2;
 
 int main()
 {
+
+
+    printf("Producer %d,  Consumer %d\nBuffer size %d\nRequests %d\n\n", PRODUCERS, CONSUMERS, BUFFER_SIZE, REQUEST);
+
     timer1 = clock();   // ดึงเวลาจาก cup -> clock1
 
-    // ประกาศตัวแปรที่เรียกว่า thread_producer, thread_consumer 
+    // ประกาศตัวแปรที่เรียกว่า thread_producer, thread_consumer
     // ซึ่งเป็นประเภท pthread_t ซึ่งเป็นจำนวนเต็มที่ใช้เพื่อระบุเธรดในระบบ
     // ซึ่งในขั้นนี้ เราจะได้ thread_id
     pthread_t thread_producer[PRODUCERS];
     pthread_t thread_consumer[CONSUMERS];
 
-    // เรียกใช้ฟังก์ชัน pthread_create () เพื่อสร้างเธรด 
+    // เรียกใช้ฟังก์ชัน pthread_create () เพื่อสร้างเธรด
     // อาร์กิวเมนต์ที่ 1 คือตัวชี้ไปยัง thread_id ซึ่งถูกตั้งค่าโดยฟังก์ชันนี้
     // อาร์กิวเมนต์ที่ 2 ระบุแอตทริบิวต์ ถ้าค่าเป็น NULL แล้วจะใช้แอตทริบิวต์เริ่มต้น
     // อาร์กิวเมนต์ที่ 3 คือชื่อของฟังก์ชันที่จะดำเนินการสำหรับเธรดที่จะสร้าง append, remove
@@ -56,7 +60,7 @@ int main()
     /* รอสักครู่เราเสี่ยงต่อการเรียกใช้ทางออกซึ่งจะยุติ   */
     /* กระบวนการและเธรดทั้งหมดก่อนที่เธรดจะเสร็จสมบูรณ์   */
 
-    // ฟังก์ชัน pthread_join () สำหรับเธรดเท่ากับ  wait() สำหรับ process 
+    // ฟังก์ชัน pthread_join () สำหรับเธรดเท่ากับ  wait() สำหรับ process
     // การเรียก pthread_join จะบล็อกการเรียกเธรดจนกว่าเธรดที่มีตัวระบุเท่ากับอาร์กิวเมนต์แรกจะถูกยกเลิก
 
     // รอให้ consumers and producers ทำงานเสร็จ
@@ -84,13 +88,17 @@ int main()
 void *add_item() {
     buffer[tail++] = 1;
     tail = tail % BUFFER_SIZE;
+    printf("Append  Head: %d  Tail: %d  Buff: %d\n", head, tail, buffer[tail]);
 }
 
 void *remove_item() {
     buffer[head++] = 0;
     head = head % BUFFER_SIZE;
+    printf("Remove  Head: %d  Tail: %d  Buff: %d\n", head, tail, buffer[head]);
 }
 
+// ฟังก์ชัน pthread_mutex_trylock () จะส่งคืนค่าศูนย์หากได้รับการล็อกบนวัตถุ mutex
+// ที่อ้างอิงโดย mutex มิฉะนั้นจะส่งคืนหมายเลขข้อผิดพลาดเพื่อระบุข้อผิดพลาด
 void *append(void *pVoid) {
     // printf("Append thread number %ld\n", pthread_self());
     while(request<REQUEST) {
@@ -106,14 +114,18 @@ void *append(void *pVoid) {
                 while (buffer[tail] != 0)
                 {
                     ptime2 = clock();
-                    if(buffer[tail] == 0) { add_item(); request++; break; }
-                    if((ptime2 - ptime1) > producer_delay) { break; }
+                    if(buffer[tail] == 0) { add_item(); request++; printf("Append Waiting %d\n", ptime2-ptime1); break; }
+                    if((ptime2 - ptime1) > producer_delay) { printf("Time Out\n"); break; }
                 }
             }
             pthread_mutex_unlock(&mutex);
+            // หากสำเร็จฟังก์ชัน pthread_mutex_lock () และ pthread_mutex_unlock ()
+            // จะคืนค่าศูนย์ มิฉะนั้นจะส่งคืนหมายเลขข้อผิดพลาดเพื่อระบุข้อผิดพลาด
         }
     }
     pthread_exit(NULL);
+    // void pthread_exit(void *retval);
+    // ฟังก์ชั่นนี้ไม่ได้กลับไปที่ผู้โทร
 }
 
 void *remove(void *pVoid) {
@@ -126,14 +138,14 @@ void *remove(void *pVoid) {
                 // printf(" - thread %ld remove success\n", pthread_self());
             }
             else {
-                
+
                 // printf("Buffer underflow\n");
                 ctime1 = clock();
                 while (buffer[head] != 1)
                 {
                     ctime2 = clock();
-                    if(buffer[head] == 1) { remove_item(); success++; break; }
-                    if((ctime2 - ctime1) > consumer_delay) { break; }
+                    if(buffer[head] == 1) { remove_item(); success++; printf("Remove Waiting %d\n", ctime2-ctime1); break; }
+                    if((ctime2 - ctime1) > consumer_delay) { printf("Time Out\n"); break; }
                 }
             }
             pthread_mutex_unlock(&mutex);
