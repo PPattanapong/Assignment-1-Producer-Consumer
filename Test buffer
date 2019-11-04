@@ -1,0 +1,70 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <time.h>
+
+const int BUFFER_SIZE = 5;
+int buffer[BUFFER_SIZE] = {0}, tail = 0, head = 0;
+
+void add_item() {
+    if(buffer[tail] == 0)
+    {
+        buffer[tail++] = 1;
+        tail = tail % BUFFER_SIZE;
+    }
+    else { printf("Buffer overflow\n"); }
+}
+
+void remove_item()
+{
+    if(buffer[head] == 1) {
+        buffer[head++] = 0;
+        head = head % BUFFER_SIZE;
+    } else { printf("Buffer underflow\n"); }
+}
+
+void display_item()
+{
+    for(int i=0; i<BUFFER_SIZE; i++)
+    {
+        printf("Buffer[%d]: %d\n", i, buffer[i]);
+    }
+}
+
+int main()
+{
+    add_item();
+    add_item();
+    add_item();
+    add_item();
+    add_item();
+    display_item();
+    printf("\n");
+
+    remove_item();
+    remove_item();
+    remove_item();
+    display_item();
+    printf("\n");
+
+    add_item();
+    add_item();
+    display_item();
+    printf("\n");
+
+    add_item();
+    add_item();
+    display_item();
+    printf("\n");
+
+    remove_item();
+    remove_item();
+    remove_item();
+    remove_item();
+    remove_item();
+    remove_item();
+    display_item();
+    printf("\n");
+
+    return 0;
+}
