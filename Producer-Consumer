@@ -1,0 +1,144 @@
+const int Buff_S = ;#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <time.h>
+#include<chrono>
+#include <iostream>
+#include <thread>
+
+using namespace std;
+int Pro, Con, ReQ, Buff_S; // เก็บค่า PRODUCERS CONSUMERS REQUEST BUFFER_SIZE
+int Pro_dalay, Con_delay; // เก็บค่า producer_delay consumer_delay
+
+#define PRODUCERS 20
+#define CONSUMERS 30
+#define REQUEST 100000
+#define BUFFER_SIZE 1000
+int buffer[BUFFER_SIZE] = {0}, tail = 0, head = 0;
+
+int request = 0, success = 0;
+
+const int producer_delay = 10; // in miliseconds
+const int consumer_delay = 10; // in miliseconds
+
+void *add_item();
+void *remove_item();
+void * append(void *pVoid);
+void * remove(void *pVoid);
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+clock_t timer1, timer2, ptime1, ptime2, ctime1, ctime2;
+
+int main()
+{
+    timer1 = clock();   // ดึงเวลาจาก cup -> clock1
+
+    // ประกาศตัวแปรที่เรียกว่า thread_producer, thread_consumer 
+    // ซึ่งเป็นประเภท pthread_t ซึ่งเป็นจำนวนเต็มที่ใช้เพื่อระบุเธรดในระบบ
+    // ซึ่งในขั้นนี้ เราจะได้ thread_id
+    pthread_t thread_producer[PRODUCERS];
+    pthread_t thread_consumer[CONSUMERS];
+
+    // เรียกใช้ฟังก์ชัน pthread_create () เพื่อสร้างเธรด 
+    // อาร์กิวเมนต์ที่ 1 คือตัวชี้ไปยัง thread_id ซึ่งถูกตั้งค่าโดยฟังก์ชันนี้
+    // อาร์กิวเมนต์ที่ 2 ระบุแอตทริบิวต์ ถ้าค่าเป็น NULL แล้วจะใช้แอตทริบิวต์เริ่มต้น
+    // อาร์กิวเมนต์ที่ 3 คือชื่อของฟังก์ชันที่จะดำเนินการสำหรับเธรดที่จะสร้าง append, remove
+    // อาร์กิวเมนต์ที่ 4 ถูกใช้เพื่อส่งผ่านอาร์กิวเมนต์ไปยังฟังก์ชัน null
+
+    /* สร้าง threads อิสระสำหรับ producers */
+    for(int i=0; i<PRODUCERS; i++)
+        pthread_create(&thread_producer[i], NULL, append, NULL);
+
+    /* สร้าง threads อิสระสำหรับ consumers */
+    for(int i=0; i<CONSUMERS; i++)
+        pthread_create(&thread_consumer[i], NULL, remove, NULL);
+
+    /* รอจนกว่าเธรดจะเสร็จสมบูรณ์ก่อนที่ main จะดำเนินการต่อ นอกเสียจากพวกเรา */
+    /* รอสักครู่เราเสี่ยงต่อการเรียกใช้ทางออกซึ่งจะยุติ   */
+    /* กระบวนการและเธรดทั้งหมดก่อนที่เธรดจะเสร็จสมบูรณ์   */
+
+    // ฟังก์ชัน pthread_join () สำหรับเธรดเท่ากับ  wait() สำหรับ process 
+    // การเรียก pthread_join จะบล็อกการเรียกเธรดจนกว่าเธรดที่มีตัวระบุเท่ากับอาร์กิวเมนต์แรกจะถูกยกเลิก
+
+    // รอให้ consumers and producers ทำงานเสร็จ
+    for(int i=0; i<CONSUMERS; i++)
+        pthread_join(thread_consumer[i], NULL);
+
+    for(int i=0; i<PRODUCERS; i++)
+        pthread_join(thread_producer[i], NULL);
+
+    timer2 = clock();   // ดึงเวลาปัจจุบันจาก cpu -> clock2
+    float elapsed = ((float)(timer2 - timer1) / CLOCKS_PER_SEC);       // CLOCKS_PER_SEC = 1000   เปลี่ยนจาก ms เป็น s
+
+    printf("\n");
+    printf("[+] # buff %d %d %d %d \n\n", PRODUCERS, CONSUMERS, BUFFER_SIZE, request);
+    printf("[+] Producers %d, Consumers %d\n", PRODUCERS, CONSUMERS);
+    printf("[+] Buffer size %d\n", BUFFER_SIZE);
+    printf("[+] Requests %d\n\n", request);
+    printf("[+] Successfully consumed %d requests (%.1f%%)\n", success, (float)success * 100 / request);
+    printf("[+] Elapsed Time: %.2f s\n", elapsed);
+    printf("[+] Throughput: %.2f successful requests/s\n", (float)(success) / elapsed);
+
+    exit(EXIT_SUCCESS);
+}
+
+void *add_item() {
+    buffer[tail++] = 1;
+    tail = tail % BUFFER_SIZE;
+}
+
+void *remove_item() {
+    buffer[head++] = 0;
+    head = head % BUFFER_SIZE;
+}
+
+void *append(void *pVoid) {
+    // printf("Append thread number %ld\n", pthread_self());
+    while(request<REQUEST) {
+        if(!pthread_mutex_trylock(&mutex) && request<REQUEST) {
+            if(buffer[tail] == 0) {
+                add_item();
+                request++;
+                // printf(" + thread %ld append success\n", pthread_self());
+            }
+            else {
+                // printf("Buffer overflow\n");
+                ptime1 = clock();
+                while (buffer[tail] != 0)
+                {
+                    ptime2 = clock();
+                    if(buffer[tail] == 0) { add_item(); request++; break; }
+                    if((ptime2 - ptime1) > producer_delay) { break; }
+                }
+            }
+            pthread_mutex_unlock(&mutex);
+        }
+    }
+    pthread_exit(NULL);
+}
+
+void *remove(void *pVoid) {
+    // printf("Remove thread number %ld\n", pthread_self());
+    while(request<REQUEST) {
+        if(!pthread_mutex_trylock(&mutex) && request<REQUEST) {
+            if(buffer[head] == 1) {
+                remove_item();
+                success++;
+                // printf(" - thread %ld remove success\n", pthread_self());
+            }
+            else {
+
+                // printf("Buffer underflow\n");
+                ctime1 = clock();
+                while (buffer[head] != 1)
+                {
+                    ctime2 = clock();
+                    if(buffer[head] == 1) { remove_item(); success++; break; }
+                    if((ctime2 - ctime1) > consumer_delay) { break; }
+                }
+            }
+            pthread_mutex_unlock(&mutex);
+        }
+    }
+    pthread_exit(NULL);
+}
