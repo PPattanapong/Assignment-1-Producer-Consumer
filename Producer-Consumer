@@ -1,4 +1,4 @@
-const int Buff_S = ;#include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <time.h>
@@ -7,8 +7,7 @@ const int Buff_S = ;#include <stdio.h>
 #include <thread>
 
 using namespace std;
-int Pro, Con, ReQ, Buff_S; // เก็บค่า PRODUCERS CONSUMERS REQUEST BUFFER_SIZE
-int Pro_dalay, Con_delay; // เก็บค่า producer_delay consumer_delay
+
 
 #define PRODUCERS 20
 #define CONSUMERS 30
@@ -127,7 +126,7 @@ void *remove(void *pVoid) {
                 // printf(" - thread %ld remove success\n", pthread_self());
             }
             else {
-
+                
                 // printf("Buffer underflow\n");
                 ctime1 = clock();
                 while (buffer[head] != 1)
